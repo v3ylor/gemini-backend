@@ -1,4 +1,4 @@
-flask
-google-generativeai
-python-dotenv
-gunicorn
+fastapi
+uvicorn
+google-genai
+pydantic
