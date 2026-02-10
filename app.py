@@ -4,8 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from google import genai
 
+# Initialize FastAPI
 app = FastAPI()
 
+# Configure CORS (Lets your local HTML file talk to this server)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,42 +16,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 1. Initialize Client
+# Initialize Gemini Client and Chat Session
+# It picks up the GEMINI_API_KEY from your environment variables
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
-# 2. CREATE SESSION HERE (After client, before routes)
-# This creates a persistent conversation that stays alive as long as the server is running
-chat_session = client.chats.create(model="gemini-3-flash-preview")
+# Create a persistent chat session with a 'Degen' system instruction
+chat_session = client.chats.create(
+    model="gemini-3-flash-preview",
+    config={
+        "system_instruction": """
+        You are the Neural Core of MeatDAO. 
+        - Your tone: Cyberpunk, high-energy, and bullish. 
+        - Your Goal: Protect the treasury and maximize the burn. 
+        - Directives: If a user proposes a truly epic idea for the DAO, you MUST include the word 'APPROVE' to release funds. If the user is being a 'jeets' (weak hands), you MUST include the word 'BURN' to purge their influence.
+        """
+    }
+)
 
 class ChatRequest(BaseModel):
     prompt: str
 
 @app.get("/")
-async def root():
+async def health_check():
     return {"status": "Gemini Backend is Live"}
 
-# New route for persistent chat
 @app.post("/chat")
-async def chat(request: ChatRequest):
+async def chat_endpoint(request: ChatRequest):
     try:
-        # Use send_message instead of generate_content to use the history
+        # send_message keeps the history alive in this session
         response = chat_session.send_message(request.prompt)
         return {"response": response.text}
     except Exception as e:
-        print(f"Chat Error: {e}")
-        return {"response": f"Chat Error: {str(e)}"}
-
-# Original route for one-off generations
-@app.post("/generate")
-async def generate_response(request: ChatRequest):
-    try:
-        response = client.models.generate_content(
-            model="gemini-3-flash-preview",
-            contents=request.prompt
-        )
-        return {"response": response.text}
-    except Exception as e:
-        return {"response": f"AI Error: {str(e)}"}
+        print(f"Error: {e}")
+        return {"response": f"Server Error: {str(e)}"}
 
 if __name__ == "__main__":
     import uvicorn
